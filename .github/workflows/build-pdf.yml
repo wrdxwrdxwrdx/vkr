@@ -36,6 +36,31 @@ jobs:
           os: debian
           texlive_version: 2025
           extra_system_packages: fonts-cmu
+          pre_compile: |
+            # TeX Live also exposes Type 1 CMU fonts under the same family names.
+            # Polyglossia needs the Unicode fonts with OpenType Cyrillic support.
+            cat > /etc/fonts/conf.d/99-no-type1.conf <<'EOF'
+            <?xml version="1.0"?>
+            <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+            <fontconfig>
+              <selectfont>
+                <rejectfont>
+                  <pattern>
+                    <patelt name="fontformat"><string>Type 1</string></patelt>
+                  </pattern>
+                </rejectfont>
+              </selectfont>
+            </fontconfig>
+            EOF
+            fc-cache -f
+            for family in 'CMU Serif' 'CMU Sans Serif' 'CMU Typewriter Text'; do
+              fc-match -f '%{family}: %{file}\n' "$family"
+              capabilities=$(fc-match -f '%{capability}' "$family")
+              case "$capabilities" in
+                *otlayout:cyrl*) ;;
+                *) echo "Missing OpenType Cyrillic support: $family" >&2; exit 1 ;;
+              esac
+            done
           latexmk_use_xelatex: true
           latexmk_shell_escape: true
           args: -g -synctex=1 -interaction=nonstopmode -halt-on-error -file-line-error
