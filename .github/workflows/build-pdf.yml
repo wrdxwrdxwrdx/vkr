@@ -1,0 +1,97 @@
+name: Build PDF
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compile document
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Remove previous PDF
+        run: rm -f tex/vkr.pdf
+
+      - name: Build with XeLaTeX
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: vkr.tex
+          working_directory: tex
+          os: debian
+          texlive_version: 2025
+          extra_system_packages: fonts-cmu
+          latexmk_use_xelatex: true
+          latexmk_shell_escape: true
+          args: -g -synctex=1 -interaction=nonstopmode -halt-on-error -file-line-error
+
+      - name: Save PDF
+        uses: actions/upload-artifact@v7
+        with:
+          name: vkr-pdf
+          path: tex/vkr.pdf
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: vkr-build-logs
+          path: |
+            tex/vkr.log
+            tex/vkr.blg
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    name: Update PDF in main
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      # Publish on top of the exact commit used for compilation.
+      - name: Check out built revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Download compiled PDF
+        uses: actions/download-artifact@v8
+        with:
+          name: vkr-pdf
+          path: tex
+
+      - name: Commit and push PDF
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- tex/vkr.pdf
+          if git diff --cached --quiet; then
+            echo "PDF is already up to date."
+            exit 0
+          fi
+          git commit -m "docs: update compiled PDF (${SOURCE_SHA})"
+          # A normal push rejects a stale build if main has advanced.
+          # Do not rebase this PDF onto sources that were not compiled.
+          git push origin HEAD:main
