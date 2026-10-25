@@ -1,15 +1,26 @@
 % !TeX TS-program = xelatex
 % !TeX spellcheck = ru_RU
-
 \documentclass[14pt, russian]{matmex-diploma-custom}
 \input{preamble.tex}
-
+\usepackage{needspace}
+\clubpenalty=10000
+\widowpenalty=10000
+\displaywidowpenalty=10000
+\hypersetup{pdftitle={Реализация пакета параметрического оценивания для библиотеки pysatl-core}}
 \begin{document}
 \input{title.tex}
 \maketitle
 
 % На этапе постановки задачи в сборку включён только план работы.
 % Остальные разделы будут подключаться по мере подготовки текста диплома.
-\input{010_task.tex}
+\input{010_task}
+\input{020_related}
+
+\setmonofont{CMU Typewriter Text}
+\bibliographystyle{ugost2008ls}
+\begingroup
+\interlinepenalty=10000
+\bibliography{vkr}
+\endgroup
 
 \end{document}
